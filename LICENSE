@@ -1,0 +1,21 @@
+Copyright (c) 2026 Sustainable Developer (Niek ten Hoopen)
+All rights reserved.
+
+This software is proprietary. Use in production environments requires a valid
+license obtained through the Craft Plugin Store:
+https://plugins.craftcms.com
+
+Permitted without a license:
+- Inspection of source code
+- Local development and testing environments
+- Continuous integration and staging environments
+
+Prohibited without a valid license:
+- Use in production environments
+- Redistribution, sublicensing, or resale
+- Removal or modification of license validation code
+- Creating derivative works for distribution
+
+This software is provided "AS IS", without warranty of any kind, express or
+implied. The author shall not be liable for any damages arising from use of
+this software.

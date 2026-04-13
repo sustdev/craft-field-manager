@@ -1,0 +1,22 @@
+{
+  "name": "sustdev/craft-field-manager",
+  "description": "CLI tool for managing Craft CMS fields and field layouts. Designed for AI agents — no manual YAML or UUID generation needed.",
+  "type": "craft-plugin",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.2",
+    "craftcms/cms": "^5.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "sustdev\\fieldmanager\\": "src/"
+    }
+  },
+  "extra": {
+    "handle": "fm",
+    "name": "Field Manager CLI",
+    "developer": "sustdev",
+    "documentationUrl": "https://github.com/sustdev/craft-field-manager",
+    "class": "sustdev\\fieldmanager\\Plugin"
+  }
+}
