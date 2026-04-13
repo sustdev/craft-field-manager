@@ -6,6 +6,7 @@ use Craft;
 use craft\console\Controller;
 use craft\fieldlayoutelements\CustomField;
 use craft\helpers\Console;
+use sustdev\fieldmanager\console\ResolvesPositioning;
 use sustdev\fieldmanager\helpers\FieldTypeResolver;
 use sustdev\fieldmanager\helpers\LayoutHelper;
 use yii\console\ExitCode;
@@ -15,11 +16,14 @@ use yii\console\ExitCode;
  */
 class LayoutController extends Controller
 {
+    use ResolvesPositioning;
+
     public ?string $entryType = null;
     public ?string $field = null;
     public ?string $tab = null;
-    public ?int $position = null;
+    public ?string $position = null;
     public ?string $after = null;
+    public ?string $before = null;
     public bool $required = false;
     public ?string $section = null;
 
@@ -28,9 +32,9 @@ class LayoutController extends Controller
         $options = parent::options($actionID);
         return match ($actionID) {
             'show' => array_merge($options, ['entryType']),
-            'add-field' => array_merge($options, ['entryType', 'field', 'tab', 'position', 'after', 'required']),
+            'add-field' => array_merge($options, ['entryType', 'field', 'tab', 'position', 'after', 'before', 'required']),
             'remove-field' => array_merge($options, ['entryType', 'field']),
-            'reorder' => array_merge($options, ['entryType', 'field', 'tab', 'after', 'position']),
+            'reorder' => array_merge($options, ['entryType', 'field', 'tab', 'after', 'before', 'position']),
             'list-entry-types' => array_merge($options, ['section']),
             default => $options,
         };
@@ -197,6 +201,8 @@ class LayoutController extends Controller
      * Usage:
      *   ddev craft fm/layout/add-field --entryType=article --field=bodyContent
      *   ddev craft fm/layout/add-field --entryType=article --field=bodyContent --tab=Content --after=title
+     *   ddev craft fm/layout/add-field --entryType=article --field=bodyContent --before=footer
+     *   ddev craft fm/layout/add-field --entryType=article --field=bodyContent --position=after:title
      *   ddev craft fm/layout/add-field --entryType=article --field=bodyContent --tab="New Tab" --required
      */
     public function actionAddField(): int
@@ -208,6 +214,11 @@ class LayoutController extends Controller
 
         if (!$this->field) {
             $this->stderr("--field is required.\n", Console::FG_RED);
+            return ExitCode::USAGE;
+        }
+
+        $positioning = $this->resolvePositioning();
+        if ($positioning === null) {
             return ExitCode::USAGE;
         }
 
@@ -235,7 +246,15 @@ class LayoutController extends Controller
             return ExitCode::OK;
         }
 
-        $result = LayoutHelper::insertFieldIntoLayout($layout, $field, $this->tab, $this->after, $this->position, $this->required);
+        $result = LayoutHelper::insertFieldIntoLayout(
+            $layout,
+            $field,
+            $this->tab,
+            $positioning['after'],
+            $positioning['position'],
+            $this->required,
+            $positioning['before'],
+        );
 
         if ($result['afterWarning']) {
             $this->stderr($result['afterWarning'] . "\n", Console::FG_YELLOW);
@@ -262,7 +281,9 @@ class LayoutController extends Controller
      *
      * Usage:
      *   ddev craft fm/layout/reorder --entryType=article --field=subtitle --after=title
+     *   ddev craft fm/layout/reorder --entryType=article --field=subtitle --before=footer
      *   ddev craft fm/layout/reorder --entryType=article --field=subtitle --position=0
+     *   ddev craft fm/layout/reorder --entryType=article --field=subtitle --position=after:title
      *   ddev craft fm/layout/reorder --entryType=article --field=subtitle --tab=Content --after=title
      */
     public function actionReorder(): int
@@ -277,8 +298,13 @@ class LayoutController extends Controller
             return ExitCode::USAGE;
         }
 
-        if (!$this->after && $this->position === null) {
-            $this->stderr("Either --after or --position is required.\n", Console::FG_RED);
+        $positioning = $this->resolvePositioning();
+        if ($positioning === null) {
+            return ExitCode::USAGE;
+        }
+
+        if ($positioning['after'] === null && $positioning['before'] === null && $positioning['position'] === null) {
+            $this->stderr("One of --after, --before, or --position is required.\n", Console::FG_RED);
             return ExitCode::USAGE;
         }
 
@@ -305,7 +331,15 @@ class LayoutController extends Controller
         $required = $extracted['element']->required;
         $targetTab = $this->tab ?? $extracted['tabName'];
 
-        $result = LayoutHelper::insertFieldIntoLayout($layout, $field, $targetTab, $this->after, $this->position, $required);
+        $result = LayoutHelper::insertFieldIntoLayout(
+            $layout,
+            $field,
+            $targetTab,
+            $positioning['after'],
+            $positioning['position'],
+            $required,
+            $positioning['before'],
+        );
 
         if ($result['afterWarning']) {
             $this->stderr($result['afterWarning'] . "\n", Console::FG_YELLOW);

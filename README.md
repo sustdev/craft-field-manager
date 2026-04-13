@@ -113,8 +113,8 @@ ddev craft fm/layout/show --entryType=insight
 | `fm/fields/create-and-add --name="X" --type=Y --entryType=Z` | Aanmaken + in layout |
 | `fm/fields/update --handle=X --new-handle=Y` | Handle/naam/type aanpassen |
 | `fm/layout/show --entryType=X` | Layout tonen |
-| `fm/layout/add-field --entryType=X --field=Y --tab=Z --after=W` | Veld toevoegen |
-| `fm/layout/reorder --entryType=X --field=Y --after=Z` | Veld verplaatsen (tab behouden tenzij `--tab` opgegeven) |
+| `fm/layout/add-field --entryType=X --field=Y --tab=Z --after=W` | Veld toevoegen (`--after`, `--before` of `--position`) |
+| `fm/layout/reorder --entryType=X --field=Y --after=Z` | Veld verplaatsen (tab behouden tenzij `--tab` opgegeven, `--before` ook mogelijk) |
 | `fm/layout/remove-field --entryType=X --field=Y` | Veld verwijderen |
 | `fm/layout/list-entry-types [--section=X]` | Entry types |
 | `fm/layout/list-sections` | Secties |
@@ -139,9 +139,13 @@ ddev craft fm/layout/show --entryType=insight
 
 - `--tab=Content` — in welk tabblad
 - `--after=fieldHandle` — na een specifiek veld (aanbevolen)
+- `--before=fieldHandle` — voor een specifiek veld
 - `--position=N` — op index N (0-based)
+- `--position=after:fieldHandle` / `--position=before:fieldHandle` — handle-vorm, gelijkwaardig aan `--after` / `--before`
 - `--required` — verplicht veld
 - Zonder positie → achteraan in de tab
+
+Combineer `--after`, `--before` en `--position` niet in één commando.
 
 ## Settings via JSON
 
@@ -339,10 +343,14 @@ ddev craft fm/layout/show --entryType=insight
 
 # Add field to layout
 ddev craft fm/layout/add-field --entryType=insight --field=subtitle --tab=Content --after=title
+ddev craft fm/layout/add-field --entryType=insight --field=subtitle --before=footer
+ddev craft fm/layout/add-field --entryType=insight --field=subtitle --position=after:title
 
 # Move field to a different position (stays in same tab unless --tab specified)
 ddev craft fm/layout/reorder --entryType=insight --field=subtitle --after=title
+ddev craft fm/layout/reorder --entryType=insight --field=subtitle --before=footer
 ddev craft fm/layout/reorder --entryType=insight --field=subtitle --position=0
+ddev craft fm/layout/reorder --entryType=insight --field=subtitle --position=after:title
 
 # Remove field from layout
 ddev craft fm/layout/remove-field --entryType=insight --field=subtitle
@@ -442,11 +450,14 @@ You can also use a fully qualified class name for plugin-specific field types.
 | `--tab="Content"` | Place in named tab (case-insensitive) |
 | `--tab="New Tab"` | Creates tab if it doesn't exist |
 | `--after=fieldHandle` | Place after another field (recommended) |
+| `--before=fieldHandle` | Place before another field |
 | `--position=N` | Place at index N (0-based) |
+| `--position=after:fieldHandle` | Same as `--after=fieldHandle` |
+| `--position=before:fieldHandle` | Same as `--before=fieldHandle` |
 | `--required` | Mark field as required |
 | _(no position)_ | Append to end of tab |
 
-Without `--tab`, the first tab is used.
+Use only one of `--after`, `--before`, or `--position` per command. Without `--tab`, the first tab is used.
 
 ## Advanced settings
 

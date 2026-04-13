@@ -10,6 +10,7 @@ use craft\console\Controller;
 use craft\fieldlayoutelements\CustomField;
 use craft\helpers\Console;
 use craft\helpers\StringHelper;
+use sustdev\fieldmanager\console\ResolvesPositioning;
 use sustdev\fieldmanager\helpers\LayoutHelper;
 use yii\console\ExitCode;
 
@@ -21,6 +22,8 @@ use yii\console\ExitCode;
  */
 class NeoController extends Controller
 {
+    use ResolvesPositioning;
+
     public ?string $field = null;
     public ?string $block = null;
     public ?string $name = null;
@@ -31,7 +34,8 @@ class NeoController extends Controller
     public ?string $fieldHandle = null;
     public ?string $tab = null;
     public ?string $after = null;
-    public ?int $position = null;
+    public ?string $before = null;
+    public ?string $position = null;
     public bool $required = false;
 
     public function options($actionID): array
@@ -40,7 +44,7 @@ class NeoController extends Controller
         return match ($actionID) {
             'show'         => array_merge($options, ['field']),
             'add-block'    => array_merge($options, ['field', 'name', 'handle', 'topLevel']),
-            'add-field'    => array_merge($options, ['field', 'block', 'fieldHandle', 'tab', 'after', 'position', 'required']),
+            'add-field'    => array_merge($options, ['field', 'block', 'fieldHandle', 'tab', 'after', 'before', 'position', 'required']),
             'remove-field' => array_merge($options, ['field', 'block', 'fieldHandle']),
             'update-block' => array_merge($options, ['field', 'block', 'newName', 'newHandle']),
             default        => $options,
@@ -149,6 +153,8 @@ class NeoController extends Controller
      * Usage:
      *   ddev craft fm/neo/add-field --field=wfdLandingPageComponents --block=heroBanner --field-handle=title
      *   ddev craft fm/neo/add-field --field=wfdLandingPageComponents --block=heroBanner --field-handle=subtitle --tab=Content --after=title
+     *   ddev craft fm/neo/add-field --field=wfdLandingPageComponents --block=heroBanner --field-handle=cta --before=footer
+     *   ddev craft fm/neo/add-field --field=wfdLandingPageComponents --block=heroBanner --field-handle=cta --position=after:title
      *   ddev craft fm/neo/add-field --field=wfdLandingPageComponents --block=heroBanner --field-handle=body --required
      */
     public function actionAddField(): int
@@ -159,6 +165,11 @@ class NeoController extends Controller
         }
         if (!$this->fieldHandle) {
             $this->stderr("--field-handle is required.\n", Console::FG_RED);
+            return ExitCode::USAGE;
+        }
+
+        $positioning = $this->resolvePositioning();
+        if ($positioning === null) {
             return ExitCode::USAGE;
         }
 
@@ -181,7 +192,15 @@ class NeoController extends Controller
             return ExitCode::OK;
         }
 
-        $result = LayoutHelper::insertFieldIntoLayout($layout, $craftField, $this->tab, $this->after, $this->position, $this->required);
+        $result = LayoutHelper::insertFieldIntoLayout(
+            $layout,
+            $craftField,
+            $this->tab,
+            $positioning['after'],
+            $positioning['position'],
+            $this->required,
+            $positioning['before'],
+        );
 
         if ($result['afterWarning']) {
             $this->stderr($result['afterWarning'] . "\n", Console::FG_YELLOW);
