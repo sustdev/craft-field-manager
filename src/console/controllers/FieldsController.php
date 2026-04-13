@@ -10,6 +10,7 @@ use craft\base\FieldInterface;
 use craft\console\Controller;
 use craft\helpers\Console;
 use craft\helpers\StringHelper;
+use sustdev\fieldmanager\console\ResolvesPositioning;
 use sustdev\fieldmanager\helpers\FieldTypeResolver;
 use sustdev\fieldmanager\helpers\LayoutHelper;
 use yii\console\ExitCode;
@@ -22,6 +23,8 @@ use yii\console\ExitCode;
  */
 class FieldsController extends Controller
 {
+    use ResolvesPositioning;
+
     public ?string $name = null;
     public ?string $handle = null;
     public ?string $newHandle = null;
@@ -35,7 +38,8 @@ class FieldsController extends Controller
     public ?string $entryType = null;
     public ?string $tab = null;
     public ?string $after = null;
-    public ?int $position = null;
+    public ?string $before = null;
+    public ?string $position = null;
 
     public function options($actionID): array
     {
@@ -46,7 +50,7 @@ class FieldsController extends Controller
             ]),
             'create-and-add' => array_merge($options, [
                 'name', 'handle', 'type', 'instructions', 'settings', 'options',
-                'entryType', 'tab', 'after', 'position', 'required',
+                'entryType', 'tab', 'after', 'before', 'position', 'required',
             ]),
             'show' => array_merge($options, ['handle']),
             'update' => array_merge($options, ['handle', 'newHandle', 'newName', 'newType', 'instructions', 'settings']),
@@ -239,6 +243,8 @@ class FieldsController extends Controller
      * Usage:
      *   ddev craft fm/fields/create-and-add --name="Subtitle" --type=plaintext --entryType=insight
      *   ddev craft fm/fields/create-and-add --name="Body" --type=richtext --entryType=insight --tab=Content --after=title
+     *   ddev craft fm/fields/create-and-add --name="CTA" --type=plaintext --entryType=insight --before=footer
+     *   ddev craft fm/fields/create-and-add --name="CTA" --type=plaintext --entryType=insight --position=after:title
      *   ddev craft fm/fields/create-and-add --name="Price" --type=number --entryType=product --required --settings='{"decimals":2}'
      */
     public function actionCreateAndAdd(): int
@@ -255,6 +261,11 @@ class FieldsController extends Controller
 
         if (!$this->entryType) {
             $this->stderr("--entryType is required.\n", Console::FG_RED);
+            return ExitCode::USAGE;
+        }
+
+        $positioning = $this->resolvePositioning();
+        if ($positioning === null) {
             return ExitCode::USAGE;
         }
 
@@ -312,7 +323,7 @@ class FieldsController extends Controller
         }
 
         // Step 2: Add to entry type layout
-        return $this->addFieldToLayout($field, $entryType);
+        return $this->addFieldToLayout($field, $entryType, $positioning);
     }
 
     private function prepareNeoField(FieldInterface $field): ?BlockType
@@ -338,9 +349,11 @@ class FieldsController extends Controller
     }
 
     /**
-     * Add a field to an entry type layout with tab/position/after support.
+     * Add a field to an entry type layout with tab/position/after/before support.
+     *
+     * @param array{after: ?string, before: ?string, position: ?int} $positioning
      */
-    private function addFieldToLayout($field, $entryType): int
+    private function addFieldToLayout($field, $entryType, array $positioning): int
     {
         $layout = $entryType->getFieldLayout();
         if (!$layout) {
@@ -354,7 +367,15 @@ class FieldsController extends Controller
             return ExitCode::OK;
         }
 
-        $result = LayoutHelper::insertFieldIntoLayout($layout, $field, $this->tab, $this->after, $this->position, $this->required);
+        $result = LayoutHelper::insertFieldIntoLayout(
+            $layout,
+            $field,
+            $this->tab,
+            $positioning['after'],
+            $positioning['position'],
+            $this->required,
+            $positioning['before'],
+        );
 
         if ($result['afterWarning']) {
             $this->stderr($result['afterWarning'] . "\n", Console::FG_YELLOW);

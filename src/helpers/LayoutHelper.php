@@ -74,7 +74,7 @@ class LayoutHelper
      *   'tabName'             — name of the tab the field was inserted into
      *   'tabCreated'          — whether a new tab was created
      *   'positionDescription' — human-readable position string for output
-     *   'afterWarning'        — non-null if --after field was not found (field appended)
+     *   'afterWarning'        — non-null if --after/--before field was not found (field appended)
      */
     public static function insertFieldIntoLayout(
         FieldLayout $layout,
@@ -83,6 +83,7 @@ class LayoutHelper
         ?string $after,
         ?int $position,
         bool $required,
+        ?string $before = null,
     ): array {
         $tabs = $layout->getTabs();
         $targetTab = null;
@@ -114,22 +115,19 @@ class LayoutHelper
         $insertIndex = null;
         $afterWarning = null;
 
-        if ($after) {
-            foreach ($elements as $i => $el) {
-                $elHandle = null;
-                if ($el instanceof CustomField) {
-                    $f = $el->getField();
-                    $elHandle = $f?->handle;
-                } elseif ($el instanceof BaseNativeField) {
-                    $elHandle = $el->attribute;
-                }
-                if ($elHandle === $after) {
-                    $insertIndex = $i + 1;
-                    break;
-                }
-            }
-            if ($insertIndex === null) {
+        if ($after !== null) {
+            $foundAt = self::findElementIndexByHandle($elements, $after);
+            if ($foundAt !== null) {
+                $insertIndex = $foundAt + 1;
+            } else {
                 $afterWarning = "Field '{$after}' not found in tab '{$targetTab->name}'. Appending to end.";
+            }
+        } elseif ($before !== null) {
+            $foundAt = self::findElementIndexByHandle($elements, $before);
+            if ($foundAt !== null) {
+                $insertIndex = $foundAt;
+            } else {
+                $afterWarning = "Field '{$before}' not found in tab '{$targetTab->name}'. Appending to end.";
             }
         } elseif ($position !== null && $position >= 0 && $position <= count($elements)) {
             $insertIndex = $position;
@@ -145,9 +143,10 @@ class LayoutHelper
         $targetTab->setElements($elements);
 
         $posDescription = match (true) {
-            $after !== null && $afterWarning === null => " after '{$after}'",
-            $position !== null                        => " at position {$position}",
-            default                                   => ' at the end',
+            $after !== null && $afterWarning === null   => " after '{$after}'",
+            $before !== null && $afterWarning === null  => " before '{$before}'",
+            $position !== null                          => " at position {$position}",
+            default                                     => ' at the end',
         };
 
         return [
@@ -156,5 +155,71 @@ class LayoutHelper
             'positionDescription' => $posDescription,
             'afterWarning' => $afterWarning,
         ];
+    }
+
+    /**
+     * Locate a layout element by its handle. Returns the index, or null if not found.
+     */
+    private static function findElementIndexByHandle(array $elements, string $handle): ?int
+    {
+        foreach ($elements as $i => $el) {
+            $elHandle = null;
+            if ($el instanceof CustomField) {
+                $f = $el->getField();
+                $elHandle = $f?->handle;
+            } elseif ($el instanceof BaseNativeField) {
+                $elHandle = $el->attribute;
+            }
+            if ($elHandle === $handle) {
+                return $i;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Parse a --position value. Returns a normalized array:
+     *   ['after' => string|null, 'before' => string|null, 'position' => int|null, 'error' => string|null]
+     *
+     * Accepted forms:
+     *   - "<int>"            → numeric position (backwards compatible)
+     *   - "after:<handle>"   → insert after field
+     *   - "before:<handle>"  → insert before field
+     */
+    public static function parsePositionValue(?string $value): array
+    {
+        $result = ['after' => null, 'before' => null, 'position' => null, 'error' => null];
+
+        if ($value === null || $value === '') {
+            return $result;
+        }
+
+        if (ctype_digit($value)) {
+            $result['position'] = (int) $value;
+            return $result;
+        }
+
+        if (str_starts_with($value, 'after:')) {
+            $handle = substr($value, 6);
+            if ($handle === '') {
+                $result['error'] = "--position=after: requires a field handle (e.g. --position=after:title).";
+                return $result;
+            }
+            $result['after'] = $handle;
+            return $result;
+        }
+
+        if (str_starts_with($value, 'before:')) {
+            $handle = substr($value, 7);
+            if ($handle === '') {
+                $result['error'] = "--position=before: requires a field handle (e.g. --position=before:title).";
+                return $result;
+            }
+            $result['before'] = $handle;
+            return $result;
+        }
+
+        $result['error'] = "Invalid --position value '{$value}'. Expected an integer, 'after:<handle>', or 'before:<handle>'.";
+        return $result;
     }
 }
