@@ -40,6 +40,8 @@ class FieldsController extends Controller
     public ?string $after = null;
     public ?string $before = null;
     public ?string $position = null;
+    public bool $force = false;
+    public bool $dryRun = false;
 
     public function options($actionID): array
     {
@@ -54,6 +56,7 @@ class FieldsController extends Controller
             ]),
             'show' => array_merge($options, ['handle']),
             'update' => array_merge($options, ['handle', 'newHandle', 'newName', 'newType', 'instructions', 'settings']),
+            'delete' => array_merge($options, ['handle', 'force', 'dryRun']),
             default => $options,
         };
     }
@@ -477,6 +480,65 @@ class FieldsController extends Controller
         $this->stdout("  Handle: {$field->handle}\n");
         $this->stdout("  Type:   " . FieldTypeResolver::shortLabel(get_class($field)) . "\n");
 
+        return ExitCode::OK;
+    }
+
+    /**
+     * Delete a field by handle.
+     *
+     * Refuses by default if the field is still used in any entry type layout or Neo block type layout.
+     * Use --force to delete anyway, or --dry-run to preview without making changes.
+     *
+     * Usage:
+     *   ddev craft fm/fields/delete --handle=subtitle
+     *   ddev craft fm/fields/delete --handle=subtitle --dry-run
+     *   ddev craft fm/fields/delete --handle=subtitle --force
+     */
+    public function actionDelete(): int
+    {
+        if (!$this->handle) {
+            $this->stderr("--handle is required.\n", Console::FG_RED);
+            return ExitCode::USAGE;
+        }
+
+        $field = Craft::$app->fields->getFieldByHandle($this->handle);
+        if (!$field) {
+            $this->stderr("Field with handle '{$this->handle}' not found.\n", Console::FG_RED);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        $usages = LayoutHelper::findFieldUsages($field);
+        $hasUsages = LayoutHelper::hasFieldUsages($usages);
+
+        if ($hasUsages) {
+            $this->stdout("Field '{$field->handle}' is still in use:\n", Console::FG_YELLOW);
+            foreach ($usages['entryTypes'] as $usage) {
+                $this->stdout("  - entry type '{$usage['handle']}' ({$usage['name']}), tab '{$usage['tab']}'\n");
+            }
+            foreach ($usages['neoBlocks'] as $usage) {
+                $this->stdout("  - Neo field '{$usage['fieldHandle']}', block '{$usage['blockHandle']}' ({$usage['blockName']}), tab '{$usage['tab']}'\n");
+            }
+            $this->stdout("\n");
+        } else {
+            $this->stdout("Field '{$field->handle}' is not used in any layout.\n");
+        }
+
+        if ($this->dryRun) {
+            $this->stdout("[dry-run] Would delete field '{$field->handle}' (" . FieldTypeResolver::shortLabel(get_class($field)) . ").\n", Console::FG_CYAN);
+            return ExitCode::OK;
+        }
+
+        if ($hasUsages && !$this->force) {
+            $this->stderr("Refusing to delete: remove the field from the layouts above or re-run with --force.\n", Console::FG_RED);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        if (!Craft::$app->fields->deleteField($field)) {
+            $this->stderr("Failed to delete field '{$field->handle}'.\n", Console::FG_RED);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        $this->stdout("Field '{$field->handle}' deleted.\n", Console::FG_GREEN);
         return ExitCode::OK;
     }
 
