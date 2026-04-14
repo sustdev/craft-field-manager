@@ -112,12 +112,14 @@ ddev craft fm/layout/show --entryType=insight
 | `fm/fields/create --name="X" --type=Y` | Veld aanmaken |
 | `fm/fields/create-and-add --name="X" --type=Y --entryType=Z` | Aanmaken + in layout |
 | `fm/fields/update --handle=X --new-handle=Y` | Handle/naam/type aanpassen |
+| `fm/fields/delete --handle=X [--force] [--dry-run]` | Veld verwijderen (refuseert bij gebruik tenzij `--force`) |
 | `fm/layout/show --entryType=X` | Layout tonen |
 | `fm/layout/add-field --entryType=X --field=Y --tab=Z --after=W` | Veld toevoegen (`--after`, `--before` of `--position`) |
 | `fm/layout/reorder --entryType=X --field=Y --after=Z` | Veld verplaatsen (tab behouden tenzij `--tab` opgegeven, `--before` ook mogelijk) |
-| `fm/layout/remove-field --entryType=X --field=Y` | Veld verwijderen |
+| `fm/layout/remove-field --entryType=X --field=Y` | Veld verwijderen uit layout |
 | `fm/layout/list-entry-types [--section=X]` | Entry types |
 | `fm/layout/list-sections` | Secties |
+| `fm/entry-types/delete --handle=X [--force] [--dry-run]` | Entry type verwijderen (refuseert bij gebruik tenzij `--force`) |
 | `fm/schema/overview [--format=json]` | Volledig schema |
 | `fm/schema/section --section=X [--format=json]` | Schema per sectie |
 
@@ -226,12 +228,14 @@ ddev craft fm/layout/show --entryType=insight
 | `fm/fields/create --name="X" --type=Y` | Veld aanmaken (zonder layout) |
 | `fm/fields/create-and-add --name="X" --type=Y --entryType=Z` | Veld aanmaken + in layout |
 | `fm/fields/update --handle=X --new-handle=Y` | Handle, naam en/of type aanpassen |
+| `fm/fields/delete --handle=X [--force] [--dry-run]` | Veld verwijderen (refuseert bij gebruik tenzij `--force`) |
 | `fm/layout/show --entryType=X` | Layout tonen |
 | `fm/layout/add-field --entryType=X --field=Y` | Veld toevoegen aan layout |
 | `fm/layout/reorder --entryType=X --field=Y --after=Z` | Veld verplaatsen |
-| `fm/layout/remove-field --entryType=X --field=Y` | Veld verwijderen |
+| `fm/layout/remove-field --entryType=X --field=Y` | Veld verwijderen uit layout |
 | `fm/layout/list-entry-types [--section=X]` | Entry types |
 | `fm/layout/list-sections` | Secties |
+| `fm/entry-types/delete --handle=X [--force] [--dry-run]` | Entry type verwijderen (refuseert bij gebruik tenzij `--force`) |
 | `fm/schema/overview [--format=json]` | Volledig schema |
 | `fm/schema/section --section=X [--format=json]` | Schema per sectie |
 
@@ -333,6 +337,11 @@ ddev craft fm/fields/create-and-add \
 # Update name, handle and/or type
 ddev craft fm/fields/update --handle=oldHandle --new-handle=newHandle
 ddev craft fm/fields/update --handle=myField --new-name="New Name" --new-type=richtext
+
+# Delete a field (refuses if still used in any layout unless --force)
+ddev craft fm/fields/delete --handle=subtitle
+ddev craft fm/fields/delete --handle=subtitle --dry-run
+ddev craft fm/fields/delete --handle=subtitle --force
 ```
 
 ### Layouts (`fm/layout/...`)
@@ -362,6 +371,17 @@ ddev craft fm/layout/list-entry-types --section=insights
 # List sections
 ddev craft fm/layout/list-sections
 ```
+
+### Entry types (`fm/entry-types/...`)
+
+```bash
+# Delete an entry type (refuses if still used in any section or Matrix field unless --force)
+ddev craft fm/entry-types/delete --handle=oldBlock
+ddev craft fm/entry-types/delete --handle=oldBlock --dry-run
+ddev craft fm/entry-types/delete --handle=oldBlock --force
+```
+
+Entry type creation is intentionally out of scope — create entry types via the control panel or project config.
 
 ### Schema inspection (`fm/schema/...`)
 
@@ -488,8 +508,10 @@ Dropdown/radio/checkbox options via `--options`:
 The plugin uses Craft's PHP API exclusively:
 
 - `Craft::$app->fields->saveField()` — creates fields (Craft generates UIDs)
+- `Craft::$app->fields->deleteField()` — deletes fields (project config auto-updated)
 - `Craft::$app->fields->saveLayout()` — modifies field layouts
 - `Craft::$app->entries->saveEntryType()` — persists entry type changes
+- `Craft::$app->entries->deleteEntryType()` — deletes entry types
 - `Neo::getInstance()->blockTypes->save()` — manages Neo block types
 
 Project config YAML in `config/project/` is updated automatically by Craft. No manual YAML editing, no UUID generation.
@@ -507,8 +529,9 @@ plugins/craft-field-manager/
     ├── helpers/
     │   └── FieldTypeResolver.php               # Type aliases, defaults, resolution
     └── console/controllers/
-        ├── FieldsController.php                # Field CRUD + create-and-add
+        ├── FieldsController.php                # Field CRUD + create-and-add + delete
         ├── LayoutController.php                # Layout management
+        ├── EntryTypesController.php            # Entry type deletion
         ├── NeoController.php                   # Neo block type management
         └── SchemaController.php                # Schema inspection (text + JSON)
 ```

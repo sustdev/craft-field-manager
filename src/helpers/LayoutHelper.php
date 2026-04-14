@@ -2,9 +2,12 @@
 
 namespace sustdev\fieldmanager\helpers;
 
+use Craft;
 use craft\base\FieldInterface;
 use craft\fieldlayoutelements\BaseNativeField;
 use craft\fieldlayoutelements\CustomField;
+use craft\fields\Matrix;
+use craft\models\EntryType;
 use craft\models\FieldLayout;
 use craft\models\FieldLayoutTab;
 
@@ -221,5 +224,136 @@ class LayoutHelper
 
         $result['error'] = "Invalid --position value '{$value}'. Expected an integer, 'after:<handle>', or 'before:<handle>'.";
         return $result;
+    }
+
+    /**
+     * Find all places where a field is currently used.
+     *
+     * Scans:
+     *   - All entry-type field layouts
+     *   - All Neo block type layouts (if Neo is installed)
+     *
+     * Returns:
+     *   [
+     *     'entryTypes' => [['handle' => string, 'name' => string, 'tab' => string], ...],
+     *     'neoBlocks'  => [['fieldHandle' => string, 'blockHandle' => string, 'blockName' => string, 'tab' => string], ...],
+     *   ]
+     */
+    public static function findFieldUsages(FieldInterface $field): array
+    {
+        $usages = [
+            'entryTypes' => [],
+            'neoBlocks'  => [],
+        ];
+
+        foreach (Craft::$app->entries->getAllEntryTypes() as $entryType) {
+            $layout = $entryType->getFieldLayout();
+            if (!$layout) {
+                continue;
+            }
+            $tabName = self::findFieldInLayout($layout, $field->handle);
+            if ($tabName !== null) {
+                $usages['entryTypes'][] = [
+                    'handle' => $entryType->handle,
+                    'name'   => $entryType->name,
+                    'tab'    => $tabName,
+                ];
+            }
+        }
+
+        if (class_exists(\benf\neo\Plugin::class)) {
+            $neoPlugin = \benf\neo\Plugin::getInstance();
+            if ($neoPlugin !== null) {
+                foreach (Craft::$app->fields->getAllFields() as $f) {
+                    if (!$f instanceof \benf\neo\Field) {
+                        continue;
+                    }
+                    $blockTypes = $neoPlugin->blockTypes->getByFieldId($f->id);
+                    foreach ($blockTypes as $blockType) {
+                        $layout = $blockType->getFieldLayout();
+                        if (!$layout) {
+                            continue;
+                        }
+                        $tabName = self::findFieldInLayout($layout, $field->handle);
+                        if ($tabName !== null) {
+                            $usages['neoBlocks'][] = [
+                                'fieldHandle' => $f->handle,
+                                'blockHandle' => $blockType->handle,
+                                'blockName'   => $blockType->name,
+                                'tab'         => $tabName,
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+
+        return $usages;
+    }
+
+    /**
+     * Find all places where an entry type is currently used.
+     *
+     * Scans:
+     *   - All sections' entry type assignments
+     *   - All Matrix fields' `entryTypes` setting
+     *
+     * Returns:
+     *   [
+     *     'sections'     => [['handle' => string, 'name' => string], ...],
+     *     'matrixFields' => [['handle' => string, 'name' => string], ...],
+     *   ]
+     */
+    public static function findEntryTypeUsages(EntryType $entryType): array
+    {
+        $usages = [
+            'sections'     => [],
+            'matrixFields' => [],
+        ];
+
+        foreach (Craft::$app->entries->getAllSections() as $section) {
+            foreach ($section->getEntryTypes() as $et) {
+                if ($et->id === $entryType->id) {
+                    $usages['sections'][] = [
+                        'handle' => $section->handle,
+                        'name'   => $section->name,
+                    ];
+                    break;
+                }
+            }
+        }
+
+        foreach (Craft::$app->fields->getAllFields() as $field) {
+            if (!$field instanceof Matrix) {
+                continue;
+            }
+            foreach ($field->getEntryTypes() as $et) {
+                if ($et->id === $entryType->id) {
+                    $usages['matrixFields'][] = [
+                        'handle' => $field->handle,
+                        'name'   => $field->name,
+                    ];
+                    break;
+                }
+            }
+        }
+
+        return $usages;
+    }
+
+    /**
+     * Whether a field-usage result contains any usages.
+     */
+    public static function hasFieldUsages(array $usages): bool
+    {
+        return !empty($usages['entryTypes']) || !empty($usages['neoBlocks']);
+    }
+
+    /**
+     * Whether an entry-type-usage result contains any usages.
+     */
+    public static function hasEntryTypeUsages(array $usages): bool
+    {
+        return !empty($usages['sections']) || !empty($usages['matrixFields']);
     }
 }
