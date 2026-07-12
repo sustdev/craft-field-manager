@@ -29,7 +29,7 @@ class EntryTypesController extends Controller
     public ?string $titleFormat = null;
     public bool $showSlugField = false;
     public ?string $icon = null;
-    public ?string $color = null;
+    public ?string $typeColor = null;
     public bool $force = false;
     public bool $dryRun = false;
 
@@ -38,7 +38,7 @@ class EntryTypesController extends Controller
         $options = parent::options($actionID);
         return match ($actionID) {
             'create' => array_merge($options, [
-                'name', 'handle', 'hasTitleField', 'titleFormat', 'showSlugField', 'icon', 'color',
+                'name', 'handle', 'hasTitleField', 'titleFormat', 'showSlugField', 'icon', 'typeColor',
             ]),
             'delete' => array_merge($options, ['handle', 'force', 'dryRun']),
             default  => $options,
@@ -56,7 +56,7 @@ class EntryTypesController extends Controller
      * Usage:
      *   ddev craft fm/entry-types/create --name="Hero Block" --handle=heroBlock
      *   ddev craft fm/entry-types/create --name="Quote" --handle=quote --has-title-field=0 --title-format="{summary}"
-     *   ddev craft fm/entry-types/create --name="CTA Block" --handle=ctaBlock --show-slug-field --icon=bullhorn --color=blue
+     *   ddev craft fm/entry-types/create --name="CTA Block" --handle=ctaBlock --show-slug-field --icon=bullhorn --type-color=blue
      */
     public function actionCreate(): int
     {
@@ -77,11 +77,11 @@ class EntryTypesController extends Controller
         }
 
         $color = null;
-        if ($this->color !== null) {
-            $color = Color::tryFrom($this->color);
+        if ($this->typeColor !== null) {
+            $color = Color::tryFrom($this->typeColor);
             if ($color === null) {
                 $validColors = implode(', ', array_map(fn($case) => $case->value, Color::cases()));
-                $this->stderr("Unknown color: '{$this->color}'. Valid values: {$validColors}.\n", Console::FG_RED);
+                $this->stderr("Unknown color: '{$this->typeColor}'. Valid values: {$validColors}.\n", Console::FG_RED);
                 return ExitCode::USAGE;
             }
         }

@@ -389,8 +389,8 @@ ddev craft fm/entry-types/create --name="Hero Block" --handle=heroBlock
 # Create an entry type without a Title field, with a custom title format instead
 ddev craft fm/entry-types/create --name="Quote" --handle=quote --has-title-field=0 --title-format="{summary}"
 
-# Create an entry type with a slug field, icon and color
-ddev craft fm/entry-types/create --name="CTA Block" --handle=ctaBlock --show-slug-field --icon=bullhorn --color=blue
+# Create an entry type with a slug field, icon and color (--type-color, since --color is the Yii ANSI flag)
+ddev craft fm/entry-types/create --name="CTA Block" --handle=ctaBlock --show-slug-field --icon=bullhorn --type-color=blue
 
 # Delete an entry type (refuses if still used in any section or Matrix field unless --force)
 ddev craft fm/entry-types/delete --handle=oldBlock
