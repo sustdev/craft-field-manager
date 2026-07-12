@@ -100,9 +100,12 @@ class EntryTypesController extends Controller
         // Craft recomputes it from the layout when saving (see Entries::saveEntryType()).
         $fieldLayout = new FieldLayout(['type' => Entry::class]);
         if ($this->hasTitleField) {
-            $fieldLayout->setTabs([
-                new FieldLayoutTab(['name' => 'Content', 'elements' => [new EntryTitleField()]]),
-            ]);
+            // The tab needs its layout before elements can be assigned,
+            // FieldLayoutTab::setElements() resolves elements through the layout.
+            $tab = new FieldLayoutTab(['name' => 'Content']);
+            $tab->setLayout($fieldLayout);
+            $tab->setElements([new EntryTitleField()]);
+            $fieldLayout->setTabs([$tab]);
         }
         $entryType->setFieldLayout($fieldLayout);
 
