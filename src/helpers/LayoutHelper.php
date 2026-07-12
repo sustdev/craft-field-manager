@@ -4,6 +4,7 @@ namespace sustdev\fieldmanager\helpers;
 
 use Craft;
 use craft\base\FieldInterface;
+use craft\elements\Entry;
 use craft\fieldlayoutelements\BaseNativeField;
 use craft\fieldlayoutelements\CustomField;
 use craft\fields\Matrix;
@@ -355,5 +356,22 @@ class LayoutHelper
     public static function hasEntryTypeUsages(array $usages): bool
     {
         return !empty($usages['sections']) || !empty($usages['matrixFields']);
+    }
+
+    /**
+     * Whether a Matrix field currently has any saved entries of the given entry type.
+     *
+     * Checks across all sites and statuses (including drafts), but not trashed entries.
+     */
+    public static function matrixFieldHasEntriesOfType(Matrix $field, EntryType $entryType): bool
+    {
+        return Entry::find()
+            ->fieldId($field->id)
+            ->typeId($entryType->id)
+            ->site('*')
+            ->status(null)
+            ->drafts(null)
+            ->limit(1)
+            ->exists();
     }
 }
