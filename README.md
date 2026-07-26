@@ -119,7 +119,11 @@ ddev craft fm/layout/show --entryType=insight
 | `fm/layout/remove-field --entryType=X --field=Y` | Veld verwijderen uit layout |
 | `fm/layout/list-entry-types [--section=X]` | Entry types |
 | `fm/layout/list-sections` | Secties |
+| `fm/entry-types/create --name="X" --handle=Y` | Entry type aanmaken |
 | `fm/entry-types/delete --handle=X [--force] [--dry-run]` | Entry type verwijderen (refuseert bij gebruik tenzij `--force`) |
+| `fm/matrix/show --field=X` | Matrix veld introspecteren |
+| `fm/matrix/add-entry-type --field=X --entry-type=Y` | Entry type koppelen aan Matrix veld |
+| `fm/matrix/remove-entry-type --field=X --entry-type=Y [--force] [--dry-run]` | Entry type loskoppelen (refuseert bij bestaande content tenzij `--force`) |
 | `fm/schema/overview [--format=json]` | Volledig schema |
 | `fm/schema/section --section=X [--format=json]` | Schema per sectie |
 
@@ -165,7 +169,7 @@ Combineer `--after`, `--before` en `--position` niet in één commando.
 4. **Gebruik `create-and-add`** als je een nieuw veld + layout wilt
 5. **Bewerk nooit YAML** in `config/project/`
 6. **Genereer nooit UUIDs**
-7. **Secties en entry types** worden handmatig aangemaakt, niet via CLI
+7. **Secties** worden handmatig aangemaakt, niet via CLI. Entry types kun je wel aanmaken via `fm/entry-types/create` en koppelen aan een Matrix veld via `fm/matrix/add-entry-type`
 8. **Verifieer** met `fm/layout/show` na elke wijziging
 ```
 
@@ -215,7 +219,7 @@ ddev craft fm/layout/show --entryType=insight
 4. **Eén commando** — gebruik `create-and-add` in plaats van los `create` + `add-field`
 5. **Bewerk nooit YAML** — geen bestanden in `config/project/` aanraken
 6. **Genereer nooit UUIDs** — Craft doet dat automatisch
-7. **Secties en entry types** — worden handmatig aangemaakt, niet via deze CLI
+7. **Secties**: worden handmatig aangemaakt, niet via deze CLI. Entry types wel via `fm/entry-types/create` + `fm/matrix/add-entry-type`
 8. **Verifieer achteraf** — draai `fm/layout/show` na een wijziging
 
 ## Alle commando's
@@ -235,7 +239,11 @@ ddev craft fm/layout/show --entryType=insight
 | `fm/layout/remove-field --entryType=X --field=Y` | Veld verwijderen uit layout |
 | `fm/layout/list-entry-types [--section=X]` | Entry types |
 | `fm/layout/list-sections` | Secties |
+| `fm/entry-types/create --name="X" --handle=Y` | Entry type aanmaken |
 | `fm/entry-types/delete --handle=X [--force] [--dry-run]` | Entry type verwijderen (refuseert bij gebruik tenzij `--force`) |
+| `fm/matrix/show --field=X` | Matrix veld introspecteren |
+| `fm/matrix/add-entry-type --field=X --entry-type=Y` | Entry type koppelen aan Matrix veld |
+| `fm/matrix/remove-entry-type --field=X --entry-type=Y [--force] [--dry-run]` | Entry type loskoppelen (refuseert bij bestaande content tenzij `--force`) |
 | `fm/schema/overview [--format=json]` | Volledig schema |
 | `fm/schema/section --section=X [--format=json]` | Schema per sectie |
 
@@ -375,13 +383,55 @@ ddev craft fm/layout/list-sections
 ### Entry types (`fm/entry-types/...`)
 
 ```bash
+# Create an entry type
+ddev craft fm/entry-types/create --name="Hero Block" --handle=heroBlock
+
+# Create an entry type without a Title field, with a custom title format instead
+ddev craft fm/entry-types/create --name="Quote" --handle=quote --has-title-field=0 --title-format="{summary}"
+
+# Create an entry type with a slug field, icon and color (--type-color, since --color is the Yii ANSI flag)
+ddev craft fm/entry-types/create --name="CTA Block" --handle=ctaBlock --show-slug-field --icon=bullhorn --type-color=blue
+
 # Delete an entry type (refuses if still used in any section or Matrix field unless --force)
 ddev craft fm/entry-types/delete --handle=oldBlock
 ddev craft fm/entry-types/delete --handle=oldBlock --dry-run
 ddev craft fm/entry-types/delete --handle=oldBlock --force
 ```
 
-Entry type creation is intentionally out of scope — create entry types via the control panel or project config.
+A newly created entry type is not attached to any section or Matrix field yet. Sections still need to be created via the control panel or project config. To attach an entry type to a Matrix field, see `fm/matrix/add-entry-type` below.
+
+### Matrix field entry types (`fm/matrix/...`)
+
+```bash
+# Introspect a Matrix field: name, handle, UID, settings, attached entry types
+ddev craft fm/matrix/show --field=pageBuilder
+
+# Attach an existing entry type to a Matrix field
+ddev craft fm/matrix/add-entry-type --field=pageBuilder --entry-type=heroBlock
+
+# Detach an entry type from a Matrix field (refuses if entries of this type exist unless --force)
+ddev craft fm/matrix/remove-entry-type --field=pageBuilder --entry-type=heroBlock
+ddev craft fm/matrix/remove-entry-type --field=pageBuilder --entry-type=heroBlock --dry-run
+ddev craft fm/matrix/remove-entry-type --field=pageBuilder --entry-type=heroBlock --force
+```
+
+**Typical workflow:**
+
+The Matrix field itself must already exist (with at least one entry type), since Craft requires a Matrix field to always have at least one entry type attached. Create the Matrix field via the control panel first, then use the CLI to add further block types to it:
+
+```bash
+# 1. Create an entry type for a new block
+ddev craft fm/entry-types/create --name="Hero Block" --handle=heroBlock
+
+# 2. Add fields to the entry type's layout
+ddev craft fm/layout/add-field --entryType=heroBlock --field=heading --required
+
+# 3. Attach the entry type to the existing Matrix field
+ddev craft fm/matrix/add-entry-type --field=pageBuilder --entry-type=heroBlock
+
+# 4. Verify
+ddev craft fm/matrix/show --field=pageBuilder
+```
 
 ### Schema inspection (`fm/schema/...`)
 
@@ -510,9 +560,10 @@ The plugin uses Craft's PHP API exclusively:
 - `Craft::$app->fields->saveField()` — creates fields (Craft generates UIDs)
 - `Craft::$app->fields->deleteField()` — deletes fields (project config auto-updated)
 - `Craft::$app->fields->saveLayout()` — modifies field layouts
-- `Craft::$app->entries->saveEntryType()` — persists entry type changes
+- `Craft::$app->entries->saveEntryType()`: creates and persists entry type changes
 - `Craft::$app->entries->deleteEntryType()` — deletes entry types
 - `Neo::getInstance()->blockTypes->save()` — manages Neo block types
+- Matrix field's `setEntryTypes()` + `Craft::$app->fields->saveField()`: attaches/detaches entry types on Matrix fields
 
 Project config YAML in `config/project/` is updated automatically by Craft. No manual YAML editing, no UUID generation.
 
@@ -531,7 +582,8 @@ plugins/craft-field-manager/
     └── console/controllers/
         ├── FieldsController.php                # Field CRUD + create-and-add + delete
         ├── LayoutController.php                # Layout management
-        ├── EntryTypesController.php            # Entry type deletion
+        ├── EntryTypesController.php            # Entry type create + delete
+        ├── MatrixController.php                # Matrix entry type attach/detach + show
         ├── NeoController.php                   # Neo block type management
         └── SchemaController.php                # Schema inspection (text + JSON)
 ```

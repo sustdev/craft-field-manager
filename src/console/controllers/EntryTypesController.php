@@ -4,21 +4,32 @@ namespace sustdev\fieldmanager\console\controllers;
 
 use Craft;
 use craft\console\Controller;
+use craft\elements\Entry;
+use craft\enums\Color;
+use craft\fieldlayoutelements\entries\EntryTitleField;
 use craft\helpers\Console;
+use craft\models\EntryType;
+use craft\models\FieldLayout;
+use craft\models\FieldLayoutTab;
 use sustdev\fieldmanager\helpers\LayoutHelper;
 use yii\console\ExitCode;
 
 /**
  * Manage Craft CMS entry types from the CLI.
  *
- * Currently only supports deletion. Entry type creation is intentionally
- * out of scope — entry types should be created via the control panel or
- * project config, since they involve structural decisions (sections, Matrix
- * ownership) that don't fit a one-shot CLI call.
+ * Designed for use by AI agents and developers who need to create or remove
+ * entry types without using the control panel. Attaching a newly created entry
+ * type to a section or Matrix field is a separate step, see fm/matrix/add-entry-type.
  */
 class EntryTypesController extends Controller
 {
+    public ?string $name = null;
     public ?string $handle = null;
+    public bool $hasTitleField = true;
+    public ?string $titleFormat = null;
+    public bool $showSlugField = false;
+    public ?string $icon = null;
+    public ?string $typeColor = null;
     public bool $force = false;
     public bool $dryRun = false;
 
@@ -26,9 +37,91 @@ class EntryTypesController extends Controller
     {
         $options = parent::options($actionID);
         return match ($actionID) {
+            'create' => array_merge($options, [
+                'name', 'handle', 'hasTitleField', 'titleFormat', 'showSlugField', 'icon', 'typeColor',
+            ]),
             'delete' => array_merge($options, ['handle', 'force', 'dryRun']),
             default  => $options,
         };
+    }
+
+    /**
+     * Create a new entry type.
+     *
+     * The entry type is created with a minimal field layout (just the Title field,
+     * if --has-title-field is not disabled). It is not attached to any section or
+     * Matrix field yet, use 'ddev craft fm/matrix/add-entry-type' to attach it to
+     * a Matrix field.
+     *
+     * Usage:
+     *   ddev craft fm/entry-types/create --name="Hero Block" --handle=heroBlock
+     *   ddev craft fm/entry-types/create --name="Quote" --handle=quote --has-title-field=0 --title-format="{summary}"
+     *   ddev craft fm/entry-types/create --name="CTA Block" --handle=ctaBlock --show-slug-field --icon=bullhorn --type-color=blue
+     */
+    public function actionCreate(): int
+    {
+        if (!$this->name) {
+            $this->stderr("--name is required.\n", Console::FG_RED);
+            return ExitCode::USAGE;
+        }
+
+        if (!$this->handle) {
+            $this->stderr("--handle is required.\n", Console::FG_RED);
+            return ExitCode::USAGE;
+        }
+
+        $existing = Craft::$app->entries->getEntryTypeByHandle($this->handle);
+        if ($existing) {
+            $this->stderr("An entry type with handle '{$this->handle}' already exists.\n", Console::FG_RED);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        $color = null;
+        if ($this->typeColor !== null) {
+            $color = Color::tryFrom($this->typeColor);
+            if ($color === null) {
+                $validColors = implode(', ', array_map(fn($case) => $case->value, Color::cases()));
+                $this->stderr("Unknown color: '{$this->typeColor}'. Valid values: {$validColors}.\n", Console::FG_RED);
+                return ExitCode::USAGE;
+            }
+        }
+
+        $entryType = new EntryType([
+            'name' => $this->name,
+            'handle' => $this->handle,
+            'hasTitleField' => $this->hasTitleField,
+            'titleFormat' => $this->titleFormat,
+            'showSlugField' => $this->showSlugField,
+            'icon' => $this->icon,
+            'color' => $color,
+        ]);
+
+        // The Title field must be present in the layout for hasTitleField to stick.
+        // Craft recomputes it from the layout when saving (see Entries::saveEntryType()).
+        $fieldLayout = new FieldLayout(['type' => Entry::class]);
+        if ($this->hasTitleField) {
+            // The tab needs its layout before elements can be assigned,
+            // FieldLayoutTab::setElements() resolves elements through the layout.
+            $tab = new FieldLayoutTab(['name' => 'Content']);
+            $tab->setLayout($fieldLayout);
+            $tab->setElements([new EntryTitleField()]);
+            $fieldLayout->setTabs([$tab]);
+        }
+        $entryType->setFieldLayout($fieldLayout);
+
+        if (!Craft::$app->entries->saveEntryType($entryType)) {
+            $this->outputEntryTypeErrors($entryType);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        $this->stdout("Entry type created successfully:\n", Console::FG_GREEN);
+        $this->stdout("  Name:   {$entryType->name}\n");
+        $this->stdout("  Handle: {$entryType->handle}\n");
+        $this->stdout("  UID:    {$entryType->uid}\n");
+        $this->stdout("\nThe entry type is now available but not yet attached to any section or Matrix field.\n");
+        $this->stdout("Use 'ddev craft fm/matrix/add-entry-type' to attach it to a Matrix field.\n");
+
+        return ExitCode::OK;
     }
 
     /**
@@ -88,5 +181,19 @@ class EntryTypesController extends Controller
 
         $this->stdout("Entry type '{$entryType->handle}' deleted.\n", Console::FG_GREEN);
         return ExitCode::OK;
+    }
+
+    private function outputEntryTypeErrors(EntryType $entryType): void
+    {
+        $errors = $entryType->getErrors();
+        $this->stderr("Failed to save entry type:\n", Console::FG_RED);
+        if (empty($errors)) {
+            $this->stderr("  (no validation errors returned, check Craft logs for details)\n", Console::FG_RED);
+        }
+        foreach ($errors as $attr => $messages) {
+            foreach ($messages as $msg) {
+                $this->stderr("  {$attr}: {$msg}\n", Console::FG_RED);
+            }
+        }
     }
 }
